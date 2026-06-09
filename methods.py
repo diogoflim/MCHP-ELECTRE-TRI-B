@@ -1,4 +1,7 @@
 from dataclasses import dataclass, field
+import math
+import matplotlib.pyplot as plt
+import pandas as pd
 
 @dataclass
 class CriterionNode:
@@ -136,3 +139,162 @@ class HierarchicalElectreTriB:
 
         visit(self.root)
         return results
+    
+
+
+def params_to_df(records):
+    """Flatten the list of sampled parameters (one dict per iteration) into a
+    DataFrame with MultiIndex columns (param, id), indexed by iteration."""
+    rows = []
+
+    for rec in records:
+        row = {}
+        for name, d in rec.items():
+            for k, val in d.items():
+                row[(name, k)] = val
+        rows.append(row)
+    out = pd.DataFrame(rows)
+    out.columns = pd.MultiIndex.from_tuples(out.columns, names=["param", "id"])
+    out.index.name = "iteration"
+    return out
+
+
+def set_equal_weights_topdown(node, weight, out=None):
+    """Split `weight` equally among the children and recurse down to the leaves,
+    accumulating every weight into the same `out` dict (returned at the root)."""
+    if out is None:
+        out = {}
+    if node.is_leaf():
+        out[node.leaf_id] = weight
+        return out
+    child_weight = weight / len(node.children)
+    for child in node.children:
+        set_equal_weights_topdown(child, child_weight, out)
+    return out
+
+
+def compute_lambdas(node, weights, lambda_frac, out=None):
+    """Compute the lambdas from a weights dict: for each internal node,
+    lambda[node] = lambda_frac * (sum of the weights of the leaves under it).
+    Everything is accumulated into the same `out` dict (returned at the root).
+
+    Recomputing is required whenever the weights change, because a node's
+    concordance saturates at the sum of the weights in its subtree."""
+    if out is None:
+        out = {}
+    if not node.is_leaf():
+        out[node.name] = lambda_frac * sum(weights[lf] for lf in node.leaves())
+        for child in node.children:
+            compute_lambdas(child, weights, lambda_frac, out)
+    return out
+
+
+def country_hierarchy(country, root, df, results, show=True):
+    """Build (and optionally print) a country's criteria tree: the class
+    assigned at each internal node and the raw value at each leaf.
+    root    : root CriterionNode of the hierarchy
+    df      : values DataFrame (countries as rows, leaves as columns)
+    results : class-per-node DataFrame (countries as rows, nodes as columns)
+    """
+    if country not in results.index:
+        raise KeyError(f"Country '{country}' not found. "
+                       f"e.g.: {list(results.index[:5])} ...")
+    values = df.loc[country]
+    rows = []
+
+    def visit(node, level):
+        if node.is_leaf():
+            cls, value = "", float(values[node.leaf_id])
+        else:
+            cls, value = results.loc[country, node.name], None
+        rows.append({"Level": level, "Criterion": node.name,
+                     "Class": cls, "Value": value})
+        for child in node.children:
+            visit(child, level + 1)
+
+    visit(root, 0)
+    table = pd.DataFrame(rows)
+    if show:
+        print(f"Country: {country}\n" + "=" * 62)
+        for _, r in table.iterrows():
+            label = "  " * r["Level"] + r["Criterion"]
+            if r["Class"]:
+                print(f"{label:<55s} -> {r['Class']}")
+            else:
+                print(f"{label:<55s}    (value = {r['Value']:.2f})")
+    return table
+
+
+def plot_acceptability_smaa(acceptability, categories, colors,
+                       node="Freedom_and_Prosperity", ncols=3):
+    """Class acceptability per country, spread across `ncols` side-by-side
+    panels so it does not become excessively tall in a single column."""
+    tab = acceptability[node].copy()
+    # sort from "best" (highest prob. of the best class) to "worst"
+    tab = tab.sort_values(list(categories[::-1]), ascending=False)
+
+    # split the ranking into contiguous blocks, one per panel
+    chunk = math.ceil(len(tab) / ncols)
+    blocks = [tab.iloc[i:i + chunk] for i in range(0, len(tab), chunk)]
+
+    fig, axes = plt.subplots(
+        1, len(blocks),
+        figsize=(5 * len(blocks), max(3, 0.18 * chunk)),
+        squeeze=False,
+    )
+    axes = axes.ravel()
+
+    for ax, block in zip(axes, blocks):
+        left = pd.Series(0.0, index=block.index)
+        for c in categories:
+            ax.barh(block.index, block[c], left=left, color=colors[c], label=c)
+            left += block[c]
+        ax.set_xlim(0, 1)
+        ax.set_xlabel("class acceptability index")
+        ax.invert_yaxis()  # best at the top of each panel
+        ax.margins(y=0)
+
+    # single legend and title for the whole figure
+    handles, labels = axes[0].get_legend_handles_labels()
+    fig.legend(handles, labels, loc="lower center",
+               ncol=len(categories), bbox_to_anchor=(0.5, -0.02))
+    fig.suptitle(f"SMAA — class acceptability per country | node: {node}")
+    plt.tight_layout(rect=[0, 0.02, 1, 0.97])
+    plt.show()
+
+
+def plot_country_pies_smaa(acceptability, nodes, categories, colors, country, ncols=3):
+    """For one country, draw a pie chart per hierarchy node with the percentage
+    of iterations in which it fell into each class (acceptabilities)."""
+    if country not in acceptability.index:
+        raise KeyError(f"Country '{country}' not found. "
+                       f"e.g.: {list(acceptability.index[:5])} ...")
+
+    nrows = math.ceil(len(nodes) / ncols)
+    fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows))
+    axes = axes.flatten()
+
+    for ax, n in zip(axes, nodes):
+        probs = acceptability.loc[country, n].reindex(categories)
+        present = probs[probs > 0]  # drop classes with 0%
+        ax.pie(present.values,
+               labels=present.index,
+               colors=[colors[c] for c in present.index],
+               autopct=lambda pct: f"{pct:.1f}%",
+               startangle=90,
+               counterclock=False)
+        ax.set_title(n)
+
+    for ax in axes[len(nodes):]:
+        ax.axis("off")
+
+    fig.suptitle(f"SMAA — class distribution per node | country: {country}", y=1.02)
+    plt.tight_layout()
+    plt.show()
+    return
+
+
+def class_acceptability_smaa(acceptability, categories, node="Freedom_and_Prosperity"):
+    tab = acceptability[node].copy()
+
+    return tab.sort_values(list(categories[::-1]), ascending=False)
