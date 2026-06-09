@@ -143,8 +143,7 @@ class HierarchicalElectreTriB:
 
 
 def params_to_df(records):
-    """Flatten the list of sampled parameters (one dict per iteration) into a
-    DataFrame with MultiIndex columns (param, id), indexed by iteration."""
+    """DataFrame with MultiIndex columns (param, id), indexed by iteration."""
     rows = []
 
     for rec in records:
@@ -174,12 +173,9 @@ def set_equal_weights_topdown(node, weight, out=None):
 
 
 def compute_lambdas(node, weights, lambda_frac, out=None):
-    """Compute the lambdas from a weights dict: for each internal node,
-    lambda[node] = lambda_frac * (sum of the weights of the leaves under it).
-    Everything is accumulated into the same `out` dict (returned at the root).
-
-    Recomputing is required whenever the weights change, because a node's
-    concordance saturates at the sum of the weights in its subtree."""
+    """Compute the lambdas from a weights dict: 
+    for each internal node, lambda[node] = lambda_frac * (sum of the weights of the leaves under it).
+    """
     if out is None:
         out = {}
     if not node.is_leaf():
@@ -190,12 +186,7 @@ def compute_lambdas(node, weights, lambda_frac, out=None):
 
 
 def country_hierarchy(country, root, df, results, show=True):
-    """Build (and optionally print) a country's criteria tree: the class
-    assigned at each internal node and the raw value at each leaf.
-    root    : root CriterionNode of the hierarchy
-    df      : values DataFrame (countries as rows, leaves as columns)
-    results : class-per-node DataFrame (countries as rows, nodes as columns)
-    """
+    """Build (and optionally print) a country's criteria tree"""
     if country not in results.index:
         raise KeyError(f"Country '{country}' not found. "
                        f"e.g.: {list(results.index[:5])} ...")
@@ -225,15 +216,11 @@ def country_hierarchy(country, root, df, results, show=True):
     return table
 
 
-def plot_acceptability_smaa(acceptability, categories, colors,
-                       node="Freedom_and_Prosperity", ncols=3):
-    """Class acceptability per country, spread across `ncols` side-by-side
-    panels so it does not become excessively tall in a single column."""
+def plot_acceptability_smaa(acceptability, categories, colors, node="Freedom_and_Prosperity", ncols=3):
     tab = acceptability[node].copy()
     # sort from "best" (highest prob. of the best class) to "worst"
     tab = tab.sort_values(list(categories[::-1]), ascending=False)
 
-    # split the ranking into contiguous blocks, one per panel
     chunk = math.ceil(len(tab) / ncols)
     blocks = [tab.iloc[i:i + chunk] for i in range(0, len(tab), chunk)]
 
