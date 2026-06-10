@@ -250,9 +250,13 @@ def plot_acceptability_smaa(acceptability, categories, colors, node="Freedom_and
     plt.show()
 
 
-def plot_country_pies_smaa(acceptability, nodes, categories, colors, country, ncols=3):
+def plot_country_pies_smaa(acceptability, nodes, categories, colors, country, ncols=3,
+                           min_pct=3.0):
     """For one country, draw a pie chart per hierarchy node with the percentage
-    of iterations in which it fell into each class (acceptabilities)."""
+    of iterations in which it fell into each class (acceptabilities).
+
+    Slices smaller than `min_pct` percent keep their wedge but hide the percentage
+    text, so labels of tiny slivers don't overlap each other."""
     if country not in acceptability.index:
         raise KeyError(f"Country '{country}' not found. "
                        f"e.g.: {list(acceptability.index[:5])} ...")
@@ -267,7 +271,8 @@ def plot_country_pies_smaa(acceptability, nodes, categories, colors, country, nc
         ax.pie(present.values,
                labels=present.index,
                colors=[colors[c] for c in present.index],
-               autopct=lambda pct: f"{pct:.1f}%",
+               autopct=lambda pct: f"{pct:.1f}%" if pct >= min_pct else "",
+               pctdistance=0.75,
                startangle=90,
                counterclock=False)
         ax.set_title(n)
