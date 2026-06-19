@@ -67,14 +67,13 @@ class HierarchicalElectreTriB:
         lambda_r = self.lambdas[node.name]
 
         if self.relation == "O3":
-            # Looks for credibility: a S_r b  <=>  sigma_r(a, b) >= lambda_r
             return self.credibility(a, b, node) >= lambda_r
 
         c = self.concordance(a, b, node)
         if c < lambda_r: return False
 
         if self.relation == "O2" and self.discordance_veto(a, b, node):
-            return False # O2 adds the binary non-veto test; O1 uses concordance only
+            return False 
 
         return True
 
