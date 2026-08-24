@@ -184,7 +184,7 @@ def compute_lambdas(node, weights, lambda_frac, out=None):
     return out
 
 
-def country_hierarchy(country, root, df, results, show=True):
+def compute_hierarchy(country, root, df, results, show=True):
     """Build (and optionally print) a country's criteria tree"""
     if country not in results.index:
         raise KeyError(f"Country '{country}' not found. "
@@ -215,77 +215,3 @@ def country_hierarchy(country, root, df, results, show=True):
     return table
 
 
-def plot_acceptability_smaa(acceptability, categories, colors, node="Freedom_and_Prosperity", ncols=3):
-    tab = acceptability[node].copy()
-    # sort from "best" (highest prob. of the best class) to "worst"
-    tab = tab.sort_values(list(categories[::-1]), ascending=False)
-
-    chunk = math.ceil(len(tab) / ncols)
-    blocks = [tab.iloc[i:i + chunk] for i in range(0, len(tab), chunk)]
-
-    fig, axes = plt.subplots(
-        1, len(blocks),
-        figsize=(5 * len(blocks), max(3, 0.18 * chunk)),
-        squeeze=False,
-    )
-    axes = axes.ravel()
-
-    for ax, block in zip(axes, blocks):
-        left = pd.Series(0.0, index=block.index)
-        for c in categories:
-            ax.barh(block.index, block[c], left=left, color=colors[c], label=c)
-            left += block[c]
-        ax.set_xlim(0, 1)
-        ax.set_xlabel("class acceptability index")
-        ax.invert_yaxis()  # best at the top of each panel
-        ax.margins(y=0)
-
-    # single legend and title for the whole figure
-    handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc="lower center",
-               ncol=len(categories), bbox_to_anchor=(0.5, -0.02))
-    fig.suptitle(f"SMAA — class acceptability per country | node: {node}")
-    plt.tight_layout(rect=[0, 0.02, 1, 0.97])
-    plt.show()
-
-
-def plot_country_pies_smaa(acceptability, nodes, categories, colors, country, ncols=3,
-                           min_pct=3.0):
-    """For one country, draw a pie chart per hierarchy node with the percentage
-    of iterations in which it fell into each class (acceptabilities).
-
-    Slices smaller than `min_pct` percent keep their wedge but hide the percentage
-    text, so labels of tiny slivers don't overlap each other."""
-    if country not in acceptability.index:
-        raise KeyError(f"Country '{country}' not found. "
-                       f"e.g.: {list(acceptability.index[:5])} ...")
-
-    nrows = math.ceil(len(nodes) / ncols)
-    fig, axes = plt.subplots(nrows, ncols, figsize=(4 * ncols, 4 * nrows))
-    axes = axes.flatten()
-
-    for ax, n in zip(axes, nodes):
-        probs = acceptability.loc[country, n].reindex(categories)
-        present = probs[probs > 0]  # drop classes with 0%
-        ax.pie(present.values,
-               labels=present.index,
-               colors=[colors[c] for c in present.index],
-               autopct=lambda pct: f"{pct:.1f}%" if pct >= min_pct else "",
-               pctdistance=0.75,
-               startangle=90,
-               counterclock=False)
-        ax.set_title(n)
-
-    for ax in axes[len(nodes):]:
-        ax.axis("off")
-
-    fig.suptitle(f"SMAA — class distribution per node | country: {country}", y=1.02)
-    plt.tight_layout()
-    plt.show()
-    return
-
-
-def class_acceptability_smaa(acceptability, categories, node="Freedom_and_Prosperity"):
-    tab = acceptability[node].copy()
-
-    return tab.sort_values(list(categories[::-1]), ascending=False)
